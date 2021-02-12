@@ -15,6 +15,7 @@
                 {:longName "of Diamonds" :shortName "DM"} 
                 {:longName "of Clubs" :shortName "CL"} 
                 {:longName "of Spade" :shortName "SP"}])
+(def headerCSV "matchnumbers,picktimes,pickedcards,remainingcards")
 
 (defn createDeckOfOneCards
 [cardtype]
@@ -203,91 +204,61 @@
                  [[(MaxMatchNumber 0) picktimes pickedcards remainingcards]]))
 )
 
-;(insertCSV)
 
-(defn readCSV
-[]
-(with-open [reader (io/reader "out-file.csv")]
-  (doall
-    (csv/read-csv reader)))
-)
+(defn lazy-file-lines [file]
+  (letfn [(helper [rdr]
+                  (lazy-seq
+                    (if-let [line (.readLine rdr)]
+                      (into (cons line (helper rdr)) "\n")
+         
+                      (do (.close rdr) nil))))]
+         (helper (clojure.java.io/reader file))))
 
-;(def mapped-csv (map readCSV))
+;(lazy-file-lines "out-file.csv")
 
-;(println mapped-csv)
+;(println (cons headerCSV (lazy-file-lines "out-file.csv")))
+
 
 (defn -main
-  "I don't do a whole lot ... yet."
-  [& args]
-  ;(loadCSVToDB f)
-  ;(readDB)
-  ;(println readCSV)
-  (createDeckOfCards)
+[& args]
+  (println "Showing previous result: \n")
+  (println (cons headerCSV (lazy-file-lines "out-file.csv")))
   (let [x (createDeckOfCards)] 
     (println (str "Creating Deck Of Cards: \n" x)) 
     (let [y (shuffleCards x)]
       (println (str "Shuffling Deck Of Cards: \n" y))
-      (println "Click \"p\" to pick up 10 random cards....")
-      (let [pid (read-line)]
-        (if (= pid "p")
-          (do (let [z (pick10RandomCardsV2 y)]
-                (let [y1 (remainingAftergetting10Cards z y)]
-                  (println (str "10 Random Picked Cards at the first time: \n" z)) 
-                  (println (str "Remaining Cards at the first time: \n" y1))
-                  (insertDB (replaceLongToShortCardTypes z cardTypes) (replaceLongToShortCardTypes y1 cardTypes) 1)
-                  (insertCSV 1 (replaceLongToShortCardTypes z cardTypes) (replaceLongToShortCardTypes y1 cardTypes))
-                  (println "Click \"p\" to pick up 10 random cards....")
-                  (let [pid1 (read-line)]
-                    (if (= pid1 "p")
-                      (do (let [z1 (pick10RandomCardsV2 y1)]
-                            (let [y2 (remainingAftergetting10Cards z1 y1)]
-                              (println (str "10 Random Picked Cards at the second time: \n" z1))
-                              (println (str "Remaining Cards at the second time: \n" y2))
-                              (insertDB (replaceLongToShortCardTypes z1 cardTypes) (replaceLongToShortCardTypes y2 cardTypes) 2)
-                              (insertCSV 2 (replaceLongToShortCardTypes z1 cardTypes) (replaceLongToShortCardTypes y2 cardTypes))
-                              (println "Click \"p\" to pick up 10 random cards....")
-                              (let [pid2 (read-line)]
-                                (if (= pid2 "p")
-                                  (do (let [z2 (pick10RandomCardsV2 y2)]
-                                        (let [y3 (remainingAftergetting10Cards z2 y2)]
-                                          (println (str "10 Random Picked Cards at the third time: \n" z2))
-                                          (println (str "Remaining Cards at the third time: \n" y3))
-                                          (insertDB (replaceLongToShortCardTypes z2 cardTypes) (replaceLongToShortCardTypes y3 cardTypes) 3)
-                                          (insertCSV 3 (replaceLongToShortCardTypes z2 cardTypes) (replaceLongToShortCardTypes y3 cardTypes))
-                                          ))))))))
-                    )
-                  )
+      (println "Picking up the first 10 random cards....")
+      (let [z (pick10RandomCardsV2 y)]
+        (println z) (println (remainingAftergetting10Cards z y))
+        (insertDB (replaceLongToShortCardTypes z cardTypes) (replaceLongToShortCardTypes (remainingAftergetting10Cards z y) cardTypes) 1)
+        (insertCSV 1 (replaceLongToShortCardTypes z cardTypes) (replaceLongToShortCardTypes (remainingAftergetting10Cards z y) cardTypes))
+        (loop [y1 (remainingAftergetting10Cards z y) picktimes 2]
+          (println (str "Click \"p\" to pick up 10 random cards at the " picktimes " times...."))
+          (let [pid (read-line)]
+            (if (= pid "p")
+              (if (< (count y1) 10)
+                (println "Remaining cards are less than 10 cards. Finished picking cards !")
+                (let [z1 (pick10RandomCardsV2 y1)]
+                  (println (str "Picked cards at the " picktimes " times: \n" z1)) 
+                  (println (str "Remaining cards at the " picktimes " times: \n" (remainingAftergetting10Cards z1 y1)))
+                  (insertDB (replaceLongToShortCardTypes z1 cardTypes) (replaceLongToShortCardTypes (remainingAftergetting10Cards z1 y1) cardTypes) picktimes)
+        (insertCSV picktimes (replaceLongToShortCardTypes z1 cardTypes) (replaceLongToShortCardTypes (remainingAftergetting10Cards z1 y1) cardTypes))
+                  (recur (remainingAftergetting10Cards z1 y1) (inc picktimes))
                 )
               )
+              (println "Finished picking cards !")
+            )
           )
-        )
+        )  
       )
     )
   )
-  
-  ;(println "ly")
-)
-
+  (println "Showing all result from database: \n")
+  (println (sql/query db ["select * from playingcards"]))
+)  
 
 ;(-main)
 
-;(jdbc/execute! db "create table users1 (id integer, name text)")
-;(jdbc/insert! db :users1 {:id 2 :name [3 4 6]})
-;(jdbc/get-by-id db :users1 1) ;; {:id 1 :name "Ivan"}
-;(jdbc/find-by-keys db :users1 {:name [1 2 3]}) ;; ({:id 1 :name "Ivan"})
 
-;(:id (first (sql/query db ["select max(id)as id from users1"])))
-
-;(sql/query db ["select * from playingcards"])
-
-;(sql/query db ["select id from playingcards"])
-
-;(sql/query db ["select matchNumber from playingcards"])
-
-;(sql/query db ["select * from playingcards where matchnumber=8"])
-
-
-                                        ;(jdbc/execute! db "alter table playingcards alter PRIMARY KEY USING COLUMNS (matchnumber, picktimes")
-
-                                        ;ALTER TABLE playingcards ALTER PRIMARY KEY USING COLUMNS (matchnumber, picktimes);
+;(sql/query db ["select * from playingcards where matchnumber=3"])
 
